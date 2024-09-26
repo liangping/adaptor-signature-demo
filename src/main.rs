@@ -67,7 +67,7 @@ fn main() {
     )
     .expect("failed to aggregate partial adaptor signatures");
 
-    // Verify the adaptor signature is valid for the given adaptor point and pubkey on side chain
+    // Verify if the adaptor signature is valid for the given adaptor point and pubkey on side chain
     musig2::adaptor::verify_single(
         aggregated_pubkey,
         &adaptor_signature,
