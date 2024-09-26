@@ -16,7 +16,7 @@ fn main() {
     let key_agg_ctx = KeyAggContext::new([pubkey_b, pubkey_dca]).unwrap();
     let aggregated_pubkey: Point = key_agg_ctx.aggregated_pubkey();
 
-    // the borrower now can funding the vault with a short time lock (24h).
+    // the borrower now can fund the vault with a short time lock (24h).
     // therefore if the DCA dose not collabrate in time, the borrower can withdraw the collateral back.
 
     // when funding is completed, Bob can initial a loan    
