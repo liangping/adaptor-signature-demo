@@ -6,14 +6,14 @@ fn main() {
 
     // the borrower: Bob
     let sec_b = Scalar::from_slice(&[0x11; 32]).unwrap();
-    let pk_b = sec_b.base_point_mul();
+    let pubkey_b = sec_b.base_point_mul();
 
     // the DCA 
     let sec_dca = Scalar::from_slice(&[0x22; 32]).unwrap();
-    let pk_dca = sec_dca.base_point_mul();
+    let pubkey_dca = sec_dca.base_point_mul();
     
     // the vault of Bob and DCA
-    let key_agg_ctx = KeyAggContext::new([pk_b, pk_dca]).unwrap();
+    let key_agg_ctx = KeyAggContext::new([pubkey_b, pubkey_dca]).unwrap();
     let aggregated_pubkey: Point = key_agg_ctx.aggregated_pubkey();
 
     // the borrower now can funding the vault with a short time lock (24h).
@@ -48,7 +48,7 @@ fn main() {
         bob_partial_signature, 
         &aggregated_nonce, 
         adaptor_point.clone(), 
-        pk_b.clone(),
+        pubkey_b.clone(),
         &nonce_b.public_nonce(), 
         message,
     ).expect("Bob's partial signature is invalid.");
@@ -132,7 +132,7 @@ fn main() {
         bob_partial_signature, 
         &aggregated_nonce, 
         adaptor_point.clone(), 
-        pk_b.clone(),
+        pubkey_b.clone(),
         &nonce_b.public_nonce(), 
         message,
     ).expect("Bob's partial signature is invalid.");
