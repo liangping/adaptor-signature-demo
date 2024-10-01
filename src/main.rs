@@ -1,8 +1,110 @@
+use bitcoin::key::Secp256k1;
+use bitcoin::script::Builder;
+use bitcoin::taproot::TapTree;
+use bitcoin::{Address, Network};
 use secp::{MaybeScalar, Point, Scalar};
-use musig2::{AdaptorSignature, KeyAggContext, PartialSignature, PubNonce};
+use musig2::{AdaptorSignature, KeyAggContext, LiftedSignature, PartialSignature};
 
 use musig2::{AggNonce, SecNonce};
 fn main() {
+    // simple_demo();
+    musig_demo();
+}
+
+#[test]
+pub fn test_address() {
+    let secp = Secp256k1::new();
+    
+    // the borrower: Bob
+    let sec_b = Scalar::from_slice(&[0x11; 32]).unwrap();
+    let pubkey_b = sec_b.base_point_mul();
+
+    // the DCA 
+    let sec_dca1 = Scalar::from_slice(&[0x2; 32]).unwrap();
+    let pubkey_dca1 = sec_dca1.base_point_mul();
+    let sec_dca2 = Scalar::from_slice(&[0x3; 32]).unwrap();
+    let pubkey_dca2 = sec_dca2.base_point_mul();
+    let sec_dca3 = Scalar::from_slice(&[0x4; 32]).unwrap();
+    let pubkey_dca3 = sec_dca3.base_point_mul();
+
+    // the vault of Bob and DCA
+    let key_agg_ctx = KeyAggContext::new([pubkey_b, pubkey_dca1, pubkey_dca2, pubkey_dca3]).unwrap();
+    let internal_key = key_agg_ctx.aggregated_pubkey();
+
+    let maturity_date = 1234;
+    let script = Builder::new()
+    .push_slice([12, 32]) // Push the hash lock
+    .push_opcode(bitcoin::blockdata::opcodes::all::OP_EQUAL)
+    .push_int(maturity_date as i64) // Push the maturity date
+    .push_opcode(bitcoin::blockdata::opcodes::all::OP_GREATERTHANOREQUAL)
+    .push_opcode(bitcoin::blockdata::opcodes::all::OP_DROP)
+    .push_opcode(bitcoin::blockdata::opcodes::all::OP_CHECKSIG)
+    .into_script();
+
+    let addr = Address::p2tr(&secp, internal_key, None, Network::Bitcoin);
+
+    println!("taproot address: {}", addr)
+}
+// this demo test if dca+borrower
+pub fn musig_demo() {
+    // the borrower: Bob
+    let sec_b = Scalar::from_slice(&[0x11; 32]).unwrap();
+    let pubkey_b = sec_b.base_point_mul();
+
+    // the DCA 
+    let sec_dca1 = Scalar::from_slice(&[0x2; 32]).unwrap();
+    let pubkey_dca1 = sec_dca1.base_point_mul();
+    let sec_dca2 = Scalar::from_slice(&[0x3; 32]).unwrap();
+    let pubkey_dca2 = sec_dca2.base_point_mul();
+    let sec_dca3 = Scalar::from_slice(&[0x4; 32]).unwrap();
+    let pubkey_dca3 = sec_dca3.base_point_mul();
+
+    // the vault of Bob and DCA
+    let key_agg_ctx = KeyAggContext::new([pubkey_b, pubkey_dca1, pubkey_dca2, pubkey_dca3]).unwrap();
+ 
+    let adaptor_secret = Scalar::random(&mut rand::thread_rng());
+    let adaptor_point = adaptor_secret.base_point_mul(); // send to DCA: T of t
+
+    let nonce_b = SecNonce::build([0x63; 32]).build();
+    let nonce_dca1 = SecNonce::build([0x11; 32]).build();
+    let nonce_dca2 = SecNonce::build([0x12; 32]).build();
+    let nonce_dca3 = SecNonce::build([0x13; 32]).build();
+
+    let aggregated_nonce = AggNonce::sum([nonce_b.public_nonce(), nonce_dca1.public_nonce(), nonce_dca2.public_nonce(), nonce_dca3.public_nonce()]);
+
+    let message = "preimage of the loan"; 
+    let bob_partial_signature: PartialSignature = musig2::adaptor::sign_partial(
+        &key_agg_ctx, sec_b, nonce_b, &aggregated_nonce, adaptor_point, message
+    ).unwrap();
+    let dca_partial_signature1: PartialSignature = musig2::adaptor::sign_partial(
+        &key_agg_ctx, sec_dca1, nonce_dca1, &aggregated_nonce, adaptor_point, message
+    ).unwrap();
+    let dca_partial_signature2: PartialSignature = musig2::adaptor::sign_partial(
+        &key_agg_ctx, sec_dca2, nonce_dca2, &aggregated_nonce, adaptor_point, message
+    ).unwrap();
+    let dca_partial_signature3: PartialSignature = musig2::adaptor::sign_partial(
+        &key_agg_ctx, sec_dca3, nonce_dca3, &aggregated_nonce, adaptor_point, message
+    ).unwrap();
+
+    let adaptor_signature: AdaptorSignature = musig2::adaptor::aggregate_partial_signatures(
+        &key_agg_ctx,
+        &aggregated_nonce,
+        adaptor_point,
+        [bob_partial_signature, dca_partial_signature1, dca_partial_signature2, dca_partial_signature3],
+        &message,
+    )
+    .expect("failed to aggregate partial adaptor signatures");
+
+    let valid_signature: LiftedSignature = adaptor_signature.adapt(adaptor_secret).unwrap();
+    let revealed_secret: MaybeScalar = adaptor_signature.reveal_secret(&valid_signature).unwrap();
+
+    assert_eq!(revealed_secret, MaybeScalar::Valid(adaptor_secret));
+    println!("{:?}\n{:?}", revealed_secret.serialize(), adaptor_secret.serialize());
+
+
+}
+
+pub fn simple_demo() {
 
     // the borrower: Bob
     let sec_b = Scalar::from_slice(&[0x11; 32]).unwrap();
